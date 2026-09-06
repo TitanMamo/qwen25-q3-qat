@@ -75,6 +75,18 @@ Same recipe on L4, batch 8, LR 1e-5 then 5e-6: fp 5.06 @500 → 8.17 @1000 (trai
 
 Batch 6, 8334-step schedule, stopped @5000: best fp 3.77 @1000, climbing +0.056/1000 after — same drift wall as 0.5B, one scale up. Grid adaptation (dg ~0.07) works faster at 1.5B; base drift is the wall at both scales.
 
+## 1.5B G64 asym (L4, the 14.10 artifact): the clean run
+
+`modal_train_15b_g64.py` on L4 — batch 2 (not 8, per the V6 lesson), LR 5e-6, 8000 steps over the 79792-block pool, GS64, peakVRAM ~13.5 GiB:
+
+| step | KL | fp | q3 | dg |
+|---|---|---|---|---|
+| 500 | 0.47 | 3.22 | 3.23 | +0.001 |
+| 1000–3000 | 0.45 | 3.21 → 3.20 | = fp | ~+0.001 |
+| 3500–8000 | 0.45 | 3.20 flat | = fp | +0.000 |
+
+No drift, no snap, no climb — fp locks at 3.20 from step ~2500 to the end. GGUF (`qwen15_g64_8000-mixed-Q3_1_G64`): **14.10**. This is the run the scale math rests on: same grid class as 0.5B's 21.88, one scale up, gap to bar nearly closed (14.10 vs 16.5 bar vs 10.43 stock-F16).
+
 ## Series
 
 V1 1028.5 → R3 60.1 → R5-sym-mixed 34.26 → R6-asym-G128-mixed 25.69 → R8-asym-G64-mixed **21.88** → bar 16.5. Every step's cause is named; nothing regressed silently.
