@@ -61,3 +61,7 @@ https://huggingface.co/TitanMamo10/qwen25-qat-q3-poc — stock F16 reference (14
 - Issue ikawrakow/ik_llama.cpp#2414 (IQ3_KT): filed with diagnosis, conceded with 1.5B numbers — resolved as non-bug.
 - Issue #2415 (`--custom-q` silently ignored): declined by design, warning-only patch offered.
 - Discussion #2417 (Q3 types RFC): whether Q3_0_G128 / Q3_1_G128 / Q3_1_G64 belong in mainline — open, artifacts published, cleanup gated on the answer.
+
+## How this was built (human + AI)
+
+Ideas, direction, and verification standards are mine; implementation is AI-assisted. I set the questions (grids to try, bars to beat, ablations to run), the AI writes the trainers, kernels, and drafts — I review, catch mistakes, and redirect. The grid-sweep pivot, the teacher-context bugfix, the contamination filter, and the batch-scaling postmortem all came out of that loop. Nothing here was accepted on the AI's say-so: every number is a measured artifact, every failed run is kept with its lesson, and the unmet bar is stated with its number — falsifiable claims over optimism.
