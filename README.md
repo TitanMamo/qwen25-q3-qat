@@ -45,6 +45,13 @@ Self-distillation only (frozen teacher, full-vocab KL, STE@0, filtered grid keep
 
 Reported the shipped IQ3_KT codebook's ~22% weight error and 0.5B collapse with repro + workarounds; maintainer showed it holds at 1.5B, and I verified his claim myself (F16 3.15 / iq3_k 3.33 / iq3_kt 3.49 — no collapse, conceded with numbers). Lesson kept: 0.5B fragility does not generalize; size-match every claim to its evidence.
 
+## Contents
+
+- [RUNS.md](RUNS.md) — complete per-run record (configs, trajectories, verdicts).
+- [TYPES.md](TYPES.md) — grid/type spec, block layouts, kernel notes.
+- [DATA.md](DATA.md) — pools, contamination control, why general text.
+- [REPRODUCE.md](REPRODUCE.md) — PPL verify + mixed-grid export.
+
 ## 5. Artifacts
 
 https://huggingface.co/TitanMamo10/qwen25-qat-q3-poc — stock F16 reference (14.74), 0.5B QAT (21.88), 1.5B QAT (14.10), README with verify commands. QAT files need a build with the Q3 kernels; the F16 verifies anywhere (see [REPRODUCE.md](REPRODUCE.md)).
