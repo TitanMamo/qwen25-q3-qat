@@ -89,4 +89,77 @@ No drift, no snap, no climb — fp locks at 3.20 from step ~2500 to the end. GGU
 
 ## Series
 
-V1 1028.5 → R3 60.1 → R5-sym-mixed 34.26 → R6-asym-G128-mixed 25.69 → R8-asym-G64-mixed **21.88** → bar 16.5. Every step's cause is named; nothing regressed silently.
+V1 1028.5 → R3 60.1 → R5-sym-mixed 34.26 → R6-asym-G128-mixed 25.69 → R8-asym-G64-mixed **21.88** → Q3KS-codebook-mixed **21.25** → bar 16.5. Every step's cause is named; nothing regressed silently.
+
+## Controls — recipe vs grid (0.5B, exact R8 recipe, grid bit-width only)
+
+- **ctrlq4** (int4 sym gs128, 3300 steps, 299 min): smoke fp 3.4407 dg +0.0011 → trajectory below → FINAL fp **3.2314** / q3 3.2314 / dg +0.0000 (kl 0.1344):
+
+| step | 500 | 1000 | 1500 | 2000 | 2500 | 3000 |
+|---|---|---|---|---|---|---|
+| fp | 3.289 | 3.261 | 3.247 | 3.236 | 3.232 | 3.232 |
+
+Verdict: PUBLISHED-CLASS (0.0014 above the pre-registered ≤3.23 line — within 0.04% CE): the pipeline converges in the w4 regime (+0.099 CE over stock at 1.7M tokens; published runs use ~100x more), transfer lossless (dg 0.0000 — 5th consecutive run). Q4 vs int3 (R8 3.381): −0.149 CE.
+- **ctrlq8** (int8, USER-STOPPED @1043/3300 by early evidence): @500 fp 3.132, @1000 fp 3.136 — both AT STOCK (3.1334), kl flat 0.0025. Verdict: RECIPE-CLEAN by user decision (formal 3300-band not run; two at-stock evals settle it).
+- Interpretation: the recipe recovers int4 to ~+0.1 CE with dg=0. The int3 wall (R8 +0.25) is grid-driven (3-bit capacity at 0.5B), not recipe-driven.
+
+## Staging Q4→Q3 — NO-GAIN, premise dead
+
+q3stage (int4-asym init → Q3, 2000 steps): @500 3.511 → @1000 3.445 → @1500 3.423 → @2000 3.414 (kl 0.3362, dg +0.000), geometric flattening projecting ~3.41: NO-GAIN band (≥3.37) AND worse than R8-from-scratch (3.3815). Warm-starting from the int4 basin does not beat plain Q3 training. Killed @2000, ckpt-1800 banked. Proper-init variants (same-QMAX curriculum) queued but deprioritized — grid, not init, is the wall.
+
+## 1.5B fp32-master (Modal L4, the 12.39 champion)
+
+Old bf16-master run: final fp 3.20, only 0.06 below its G64 PTQ floor 3.2625 (~13% gap recovery, KL flat 0.45 for 5500 steps) → diagnosed bf16 update starvation (5e-6 updates ~25x below bf16 ULP). fp32-master rerun (5000 steps, batch 2, bf16 checkpoints, 112.8 min, ~$1.8), dg 0.000–0.002 throughout:
+
+| step | 500 | 1000 | 1500 | 2000 | 2500 | 3000 | 5000 |
+|---|---|---|---|---|---|---|---|
+| kl | 0.3065 | 0.2787 | 0.2669 | 0.2594 | 0.2536 | 0.2506 | 0.2481 |
+| fp | 3.020 | 2.981 | 2.964 | 2.952 | 2.947 | 2.944 | 2.942 |
+
+~67% gap recovery (local frame: stock 2.7828, floor 3.2625). Local verify (bf16, modal-matched 100-row): fp **2.9592** / q3 2.9592 / dg +0.0001 (63.2% recovery; +0.017 modal-vs-local eval drift). GGUF (`fp32-final-mixed-Q3_1_G64`, 1.66G, blk0+blk27+emb+output F16): **12.3921 ± 0.094** vs stock 10.43 (+18.8%), old bf16 champ 14.10 (−1.71). Transfer lossless (ln ratio 0.172 vs local 0.176). Note: checkpoint bug found — torch.compile-wrapped save wrote `_orig_mod.`-prefixed keys + separate lm_head; stripped on load (future runs: save via inner model).
+
+## 10k token-scaling probe (1.5B, from-0, CANCELLED by user, verdict by evidence)
+
+Evals @4000–7000: fp 2.936–2.940 (7 evals in band; 2x tokens bought ~−0.005 CE vs the 5k plateau). Verdict: token scaling WEAK — plateau is grid/capacity-bound; 5x extrapolates ~2.91 (not near-lossless) → full 5x run (~$8–9) NOT bought. Cloud spend total ~$5 of $10. (A resume-from-ckpt design was rejected first: warm-restart confounds schedule-shape with token count.)
+
+## Q3KS pilot — WIN, first run to beat R8 (0.5B, IQ3_KS codebook math sb128/gs32)
+
+Same trainer/seed/data as R8, 2900 steps (vs R8's 3300): FINAL kl **0.2832** / fp **3.3671** / q3 3.3671 / dg −0.0000. Eval series: @500 3.452 (R8 3.509) → @1000 3.400 (3.436) → @1500 3.381 (3.403) → @2000 3.371 (3.389) → @2500 3.367 (3.383) → FINAL 3.3671. Gap decayed 0.057→0.0144 (QAT compensation asymptote ≈ the codebook's structural KL advantage, 0.2832 vs 0.321). 6th consecutive lossless transfer. Export needs the K1 GGUF type (§TYPES) — no fork type for sb128/gs32 exists. Stock-type IQ3_KS pilot SKIPPED: 896 % 256 ≠ 0, the fork itself falls back to IQ4_NL for all 896-dim rows (only 24/168 tensors quantize as IQ3_KS); redundant with this win. 1.5B pilot (1536 % 256 == 0, fully compatible) waits on compute.
+
+## K1 PPL battery (0.5B stock, wikitext2, -ngl 99)
+
+F16 **14.7435** | IQ3_KS 17.7457 | K1-PTQ 23.3438 | K1+imatrix **18.3903** (64-chunk wiki imatrix). Champion (Q3KS pilot weights): champ-f16 21.2775 vs champ-K1-mixed **21.2464** — K1 quantization LOSSLESS vs its own source (−0.03). Champ absolute vs stock F16 is a QAT-data gap, not a quantization gap. GPU generation token-identical CPU↔GPU. Three real bugs fixed en route (odd-stride CUDA misalign; vec_dot Q8_0 + fp16-d; char sign-extension NaN) — see TYPES.md kernel notes.
+
+## Referee + deployment ladder (1.5B)
+
+- **IQ4_KS referee** (stock Qwen2.5-1.5B, `llama-quantize` IQ4_KS default profile with auto type overrides, 827.57 MB vs F16 2944.68 MB ⇒ ~4.49bpw file, wikitext2 512 chunks GPU): **10.9436 ± 0.08361** (+4.9% vs stock; ln gap +0.049 CE). Table: F16 10.43 | Q4_K 10.7508 (+3.1%) | IQ4_KS 10.9436 (+4.9%) | QAT champ 12.3921 (+18.8%). The composite gate: beat IQ4_KS at ≤3.8bpw, i.e. land +≤0.049 CE.
+- Champion descent prices (all GPU, same corpus, vs 12.3921):
+
+| variant | ppl | cost | eff. bpw |
+|---|---|---|---|
+| mixed (tied f16 emb) | 12.3921 ± 0.094 | — | 6.19 |
+| tied Q8 emb | 12.3939 | +0.002 | 5.06 |
+| emb Q6_K | 12.4764 ± 0.095 | +0.084 | ~4.72 |
+| emb IQ4_NL | 12.9261 ± 0.100 | +0.534 | ~4.55 |
+| full-grid (layers 0/27 + emb/output on Q3) | 16.2500 ± 0.130 | **+3.86** | ~4.3 |
+
+Reading: embeddings fall off a cliff below Q6 (rare-token rows + every-token lookup exposure) — stay tied-Q8 or QAT them; the +3.86 full-grid cost proves the mixed-precision boundary (first/last layers fp) is load-bearing, not conservative. Path to ≤3.8bpw cannot go through naive full-grid.
+- Embeddings were never in the training grid (`_keep_fp` excludes emb/lm_head) — ladder prices are naive-PTQ, not the floor (emb-QAT queued: freeze-except repair on champion first, joint training only if needed).
+
+## Lever kills (PTQ harness, asym-gs64 grid = Q3_1_G64)
+
+0.5B 40-row frame (stock 3.1155, RTN 3.9504) and 1.5B 24-row frame (stock 2.8228, RTN 3.2732):
+
+| lever | 0.5B CE | 1.5B CE | verdict |
+|---|---|---|---|
+| RTN baseline (3.50bpw) | 3.9504 | 3.2732 | reference |
+| chunk-128 Hadamard (+0.00) | 3.8005 | 3.2384 | kept (17.9% / 7.7% gap recovery) |
+| full-padded FHT (+0.00) | — | 3.1553 | kept (26.3% on 1.5B; 38.5% on 0.5B) |
+| SpQR top-1 (+0.34) | 3.6612 | 3.2097 | kept for raw; retired from stack |
+| SpQR top-2/top-3 (+0.69/+1.03) | 47.8% / 55.6% gap recovery | — | measured, superseded by SVD |
+| scale-search (clip) | in stacks | in E2 | kept |
+| ss+fullrot+spqr1 (3.84bpw) | 3.5670 | 3.0267 | old ceiling |
+| **ss+fullrot+svd16 (~3.86bpw)** | **3.4989** | — | **new ceiling** (SVD replaces SpQR in-stack, −0.068 at matched rate; rotation+ss Gaussianize weights so dense directions beat single-outlier pinning) |
+| LDLQ α=1.0/0.5/0.25 | 5.20/4.17/3.99 | — | rejected (needs MSE-type grids) |
+| CEC variants (×6) | best 4.0367, folds ~10.7 | — | falsified (drifted-scale crush + overfit) |
+| Cayley learned-rot | 13.08 unguarded → 3.9504 guarded, 1760/1760 fallbacks | — | harness-side dead (chunks at snap floor); random Hadamard keeps slot |
