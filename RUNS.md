@@ -100,7 +100,7 @@ V1 1028.5 → R3 60.1 → R5-sym-mixed 34.26 → R6-asym-G128-mixed 25.69 → R8
 | fp | 3.289 | 3.261 | 3.247 | 3.236 | 3.232 | 3.232 |
 
 Verdict: PUBLISHED-CLASS (0.0014 above the pre-registered ≤3.23 line — within 0.04% CE): the pipeline converges in the w4 regime (+0.099 CE over stock at 1.7M tokens; published runs use ~100x more), transfer lossless (dg 0.0000 — 5th consecutive run). Q4 vs int3 (R8 3.381): −0.149 CE.
-- **ctrlq8** (int8, USER-STOPPED @1043/3300 by early evidence): @500 fp 3.132, @1000 fp 3.136 — both AT STOCK (3.1334), kl flat 0.0025. Verdict: RECIPE-CLEAN by user decision (formal 3300-band not run; two at-stock evals settle it).
+- **ctrlq8** (int8, stopped @1043/3300 on early evidence): @500 fp 3.132, @1000 fp 3.136 — both AT STOCK (3.1334), kl flat 0.0025. Verdict: RECIPE-CLEAN on early evidence (formal 3300-band not run; two at-stock evals settle it).
 - Interpretation: the recipe recovers int4 to ~+0.1 CE with dg=0. The int3 wall (R8 +0.25) is grid-driven (3-bit capacity at 0.5B), not recipe-driven.
 
 ## Staging Q4→Q3 — NO-GAIN, premise dead
@@ -118,7 +118,7 @@ Old bf16-master run: final fp 3.20, only 0.06 below its G64 PTQ floor 3.2625 (~1
 
 ~67% gap recovery (local frame: stock 2.7828, floor 3.2625). Local verify (bf16, modal-matched 100-row): fp **2.9592** / q3 2.9592 / dg +0.0001 (63.2% recovery; +0.017 modal-vs-local eval drift). GGUF (`fp32-final-mixed-Q3_1_G64`, 1.66G, blk0+blk27+emb+output F16): **12.3921 ± 0.094** vs stock 10.43 (+18.8%), old bf16 champ 14.10 (−1.71). Transfer lossless (ln ratio 0.172 vs local 0.176). Note: checkpoint bug found — torch.compile-wrapped save wrote `_orig_mod.`-prefixed keys + separate lm_head; stripped on load (future runs: save via inner model).
 
-## 10k token-scaling probe (1.5B, from-0, CANCELLED by user, verdict by evidence)
+## 10k token-scaling probe (1.5B, from-0, ended @~7800, verdict by evidence)
 
 Evals @4000–7000: fp 2.936–2.940 (7 evals in band; 2x tokens bought ~−0.005 CE vs the 5k plateau). Verdict: token scaling WEAK — plateau is grid/capacity-bound; 5x extrapolates ~2.91 (not near-lossless) → full 5x run (~$8–9) NOT bought. Cloud spend total ~$5 of $10. (A resume-from-ckpt design was rejected first: warm-restart confounds schedule-shape with token count.)
 
