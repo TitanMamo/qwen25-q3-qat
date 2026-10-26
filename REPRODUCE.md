@@ -33,9 +33,10 @@ llama-perplexity -m qwen2.5-1.5b-k2-3.34bpw.gguf -f ppl_wikitext2.txt -ngl 99 -t
 Re-encode from scratch (19.4 min measured on one RTX 3060):
 
 ```bash
-# exllamav3 + the K2 writer; -b is the allocator BUDGET, not a per-tensor rate
+# exllamav3 + the K2 writer. -b alone reproduces the RATE, not the file: the released per-tensor
+# map comes from the SC/RCO recipe (see the allocation section below).
 python exllamav3/convert.py -i <hf Qwen2.5-1.5B snapshot> -o out -w out_work \
-    -hb 6 -b 3.34 -d 0
+    -rcp recipe.yaml -hb 6 -d 0          # or: -b 3.34 for a fresh heuristic allocation
 ```
 
 Read the realized per-tensor rates back out of the GGUF (this is how the 61.1/18.8/5.0/15.1% mix in
@@ -47,14 +48,16 @@ r = gguf.GGUFReader("qwen2.5-1.5b-k2-3.34bpw.gguf")
 dist = collections.Counter()
 for t in r.tensors:
     ne = list(t.shape)
-    if len(ne) == 3 and ne[0] % 16 == 0 and ne[0] // 16 <= 8:
+    if len(ne) == 3 and ne[0] % 16 == 0 and ne[0] // 16 <= 5:   # <=5 EXCLUDES the K=6 head, which is
+                                                                 # not part of the body rate
+
         dist[ne[0] // 16] += 256 * ne[1] * ne[2]      # K -> weights
 print(dist, sum(k*w for k, w in dist.items()) / sum(dist.values()))
 ```
 
 Evidence for every K2 number: https://huggingface.co/TitanMamo10/Qwen2.5-1.5B-K2-3.34bpw/blob/main/evidence/k2_evidence.tar.gz
 
-Encoder measurements live in `bench_scripts/` (profiler attribution, TF32 A/B, occupancy A/B); the
+Encoder measurements live in `qat_tools/bench_scripts/` (the author's working tree, not shipped here) (profiler attribution, TF32 A/B, occupancy A/B); the
 occupancy run must build inside the `cuda-box` distrobox, because the host has no CUDA compiler and
 `build_ext` needs `nvcc`.
 

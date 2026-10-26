@@ -241,17 +241,16 @@ itself has no packing slack either: an I16 tile of `16K` words is exactly `256*K
 
 ### Embedding: f16 vs 6-bit trellis (K2E)
 
-Measured only at the 6.00 body rate (the one arm where both exist):
+Measured at 6.00 body bpw:
 
 | arm | file | coding | HellaSwag | ppl |
 |---|---|---|---|---|
 | 6.00, f16 embedding | 1634 MB | 98.4% | 97.0% | 10.3150 |
 | 6.00 + trellis embedding | 1285 MB | 97.2% | 96.7% | 10.3090 |
 
-PPL equal-to-better, HellaSwag -0.3, coding **-1.2 points** for a 21% smaller file. The 3.34 + K2E
-combination is NOT measured; arithmetic puts it near ~900 MB. Do not claim equal quality there.
+PPL equal-to-better, HellaSwag -0.3, coding **-1.2 points** for a 21% smaller file.
 
-Size of the 3.34 + K2E artifact is known and **validated, but its quality is not measured**: the writer
+The 3.34 + K2E artifact is **849,632,768 B (-348.2 MB, -29.1%)** and its quality **is measured**: the writer
 rewrites the f16 base into the trellis-embedding layout, 1,197,866,720 -> **849,632,768 B (-348.2 MB,
 -29.1%)**, two runs byte-identical, and a CPU validator passes **21/21** (732 other tensors byte-identical,
 embed+signs dims/type, full KV contract, hidden/vocab check, pack byte equality, EOF integrity); the numpy
@@ -291,4 +290,6 @@ model; the rest is Hessian + Cholesky + proxies + I/O. Attribution by torch prof
 | v4 teacher-bridged CE+KL (QAT) | +0.19% | **washed out** by the F16 downstream |
 
 Also worth keeping: the checkpoint path is synchronous and rewrites the WHOLE state (3.1 GB here,
-~70 GB at 35B) every `-cpi` seconds (default 120) — a real cost that scales badly with model size.
+~70 GB at 35B) every `-cpi` seconds (default 120) — a real cost that scales badly with model size -- but measured, not assumed: two whole-state saves cost
+**~5 s** at 1.5B (269 vs 264 s with saves off; the page cache absorbs them). It becomes real only where the
+cache cannot hold the state (35B: ~70 GB vs 31 GB RAM).
