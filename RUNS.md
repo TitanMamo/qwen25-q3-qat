@@ -211,6 +211,16 @@ Measured only at the 6.00 body rate (the one arm where both exist):
 PPL equal-to-better, HellaSwag -0.3, coding **-1.2 points** for a 21% smaller file. The 3.34 + K2E
 combination is NOT measured; arithmetic puts it near ~900 MB. Do not claim equal quality there.
 
+Size of the 3.34 + K2E artifact is known and **validated, but its quality is not measured**: the writer
+rewrites the f16 base into the trellis-embedding layout, 1,197,866,720 -> **849,632,768 B (-348.2 MB,
+-29.1%)**, two runs byte-identical, and a CPU validator passes **21/21** (732 other tensors byte-identical,
+embed+signs dims/type, full KV contract, hidden/vocab check, pack byte equality, EOF integrity); the numpy
+mirror of the CUDA embed kernel decodes 12 rows at cos >= 0.99774. Two things were never run: a runtime
+load test and a perplexity/retention arm on this model. Additional constraint recorded with it: the MTP and
+draft graphs call plain `ggml_get_rows` (no I16 case -> `GGML_ABORT`), so the trellis embedding must stay
+off for qwen35moe (and glm5next/deepseek2/deepseek4/glm4/qwen4exp/step35) until those graphs learn the
+branch; dense qwen2/qwen3 are safe.
+
 ## K2 encoder lever kills and where the encode time goes
 
 The encode (1.5B) was 19.4 min: `quant_thread` = **2.00 M weights/s = 54%**, i.e. 2.2x off its own cost
