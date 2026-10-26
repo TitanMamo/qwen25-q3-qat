@@ -26,6 +26,10 @@ Grid sweep (100-row CE, stock 3.13): sym-gs128 6.33 → sym-gs64 5.74 → asym-g
 
 ## 2. Training series (mixed-export ppl)
 
+> Naming: the training stage of the K2 release is called **SantanaQAT** (scales-only QAT on frozen
+> trellis codes, 0.09 % of the parameters). It is a different lever from the full-weight grid training
+> in this section, which is the Q3-series work.
+
 Self-distillation only (frozen teacher, full-vocab KL, STE@0, filtered grid keeping embed/lm_head/first+last layers fp, wikitext corpus with 0.3% eval-contaminated blocks dropped — wikitext-2 test is partially inside wikitext-103 train):
 
 | run | ppl | what changed |

@@ -166,6 +166,9 @@ Reading: embeddings fall off a cliff below Q6 (rare-token rows + every-token loo
 
 ## K2 trellis, 1.5B 3.34 bpw — WIN (beats this series' ceiling)
 
+Training stage: **SantanaQAT** (scales-only, 0.09 % of parameters, +6.1 coding points, 10 min on
+one 12 GB card) -- a different lever from this file's full-weight grid training.
+
 Encoder: `exllamav3` converter + a K2 trellis writer, 250x2048 calibration set, `-hb 6 -b 3.34`, 19.4 min
 measured on the RTX 3060 box.
 
