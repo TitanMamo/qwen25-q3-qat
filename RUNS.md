@@ -199,6 +199,25 @@ priority-ordered, with per-module floors — which is why the mix above appears 
 gets a different mix. The target is also size-dependent: at the same 3.34 the 0.5B lost coding 100 -> 53.3%
 and GSM8K 16.5 -> 4.0, the 1.5B held 79.7% / 52.0%.
 
+### Storage-only coding (entropy / arithmetic) is worth 1.000x here — measured, dead
+
+The obvious "shrink the file without touching quality" idea: entropy-code the stored stream, decode at
+load. For this codec it is worth nothing, and the reason is structural:
+
+| tensor | stored index entropy | first-order H1 |
+|---|---|---|
+| gate_proj K=4 | H = 4.000 b | 3.999 b |
+| down_proj K=3 | H = 3.000 b | 3.000 b |
+| q_proj K=4 | H = 4.000 b | 3.999 b |
+| up_proj K=4 | H = 4.000 b | 3.999 b |
+
+4000 sampled tiles, `k2_symbol_entropy.py`. The `mul1` codebook is a pseudorandom permutation of the
+levels, so the stored K-bit transitions *are* the true entropy of the representation — there is no
+fixed-rate waste to reclaim, and the 1.32-1.38x gap to the Shannon bound is the code construction, not the
+coder. (For the earlier grid types the same trick was estimated at 5-15% of grid bytes because their code
+usage is non-uniform; it was never implemented, and it costs mmap plus a decode-at-load step.) The payload
+itself has no packing slack either: an I16 tile of `16K` words is exactly `256*K` bits for 256 weights.
+
 ### Embedding: f16 vs 6-bit trellis (K2E)
 
 Measured only at the 6.00 body rate (the one arm where both exist):
