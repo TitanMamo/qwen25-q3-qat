@@ -1,5 +1,8 @@
 # 3-bit QAT on Qwen2.5 (0.5B/1.5B): types that work, training short of the bar
 
+> **Naming:** the training stage of the K2 release is **SantanaQAT** (scales-only QAT on frozen
+> trellis codes). This repository tracks the whole QAT programme, including the full-weight grid series
+> in §2-3 that predates it.
 Goal: a ~3–3.5 bpw quantization whose grid is learned by training (QAT) instead of fitted post-hoc (PTQ), so deployment *is* the training grid. Base models Qwen2.5-0.5B (fast loop) and 1.5B (scale check) — the largest a 6 GB card can train through quantization with a CPU-offload AdamW trainer.
 
 Status: **the format/runtime half is done; the training half is not at its bar.**
