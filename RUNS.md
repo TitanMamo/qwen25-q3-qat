@@ -281,7 +281,7 @@ model; the rest is Hessian + Cholesky + proxies + I/O. Attribution by torch prof
 | `-hreg` sigma sweep | sigma 0 / 0.005 / 0.05 all give ppl 44,440,843 | **KNOB IS BROKEN** (sets `sigma_reg_out` only; the sigma LDLQ consumes is the input-side one, exposed as `K2_SIGMA_REG` by [`patches/exllamav3-k2_sigma_reg.patch`](patches/exllamav3-k2_sigma_reg.patch)) |
 | proxy trimming (rfn/cos/sqnr) | `num_ref_states = 5` | **dead** — already trivial |
 | Hessian sharing | 4 Hessians/layer, not 7 (q/k/v share, up/gate share) | **already done** |
-| beam 8192 in the tile search | tile level: rfn identical to exact (0.15474); 4096 = +2.3%, 1024 = +7.9% | **not shipped** (needs per-step state lists + pinned ring anchor) — QATv2 |
+| beam in the tile search | **WITHDRAWN as a speed lever**: the lossless width (8192) equals the full state count at K=3 (8192) and exceeds it at K=4/5/6, so the quality-preserving beam *is* the exact search (**1.0x**); widths that prune cost distortion (4096 = +2.3%, 1024 = +7.9%, 256 = +12.1%) | **dead for speed** -- the search half can only be traded away or removed by a codec with a smaller state space, and every measured codec candidate is worse |
 | Woodbury `H^-1` instead of the Cholesky factor | identity exact to 1.4e-14, ~2000x cheaper per solve | **unusable as-is**: `ldlq` consumes Cholesky slices, so it needs the H^-1 (GPTQ) recursion = algorithm change — QATv2 |
 | diversity / extra WAVA passes / local-exact refinement | +20% / bit-identical / full sweep | **rejected** |
 | second Gauss-Seidel sweep (QAT scales) | +0.0007 | **null** |
