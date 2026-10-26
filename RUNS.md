@@ -260,7 +260,7 @@ model; the rest is Hessian + Cholesky + proxies + I/O. Attribution by torch prof
 | assembly (GGUF rewrite) | 91 s -> 4 s, byte-identical (md5) | **KEPT** (~7% of the encode) |
 | TF32 calibration Hessian | layer-1 rfn +36%, layer 2 `cholesky: not positive-definite` | **REJECTED** |
 | block size 1024 -> 512/256 threads | 268 s -> 271 s (0.99x), pack byte-identical | **REJECTED** — the search is throughput-bound, not barrier-bound |
-| `-hreg` sigma sweep | sigma 0 / 0.005 / 0.05 all give ppl 44,440,843 | **KNOB IS BROKEN** (sets `sigma_reg_out` only; main sigma is `K2_SIGMA_REG`) |
+| `-hreg` sigma sweep | sigma 0 / 0.005 / 0.05 all give ppl 44,440,843 | **KNOB IS BROKEN** (sets `sigma_reg_out` only; the sigma LDLQ consumes is the input-side one, exposed as `K2_SIGMA_REG` by [`patches/exllamav3-k2_sigma_reg.patch`](patches/exllamav3-k2_sigma_reg.patch)) |
 | proxy trimming (rfn/cos/sqnr) | `num_ref_states = 5` | **dead** — already trivial |
 | Hessian sharing | 4 Hessians/layer, not 7 (q/k/v share, up/gate share) | **already done** |
 | beam 8192 in the tile search | tile level: rfn identical to exact (0.15474); 4096 = +2.3%, 1024 = +7.9% | **not shipped** (needs per-step state lists + pinned ring anchor) — QATv2 |

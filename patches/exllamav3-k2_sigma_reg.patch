@@ -1,0 +1,61 @@
+diff --git a/exllamav3/modules/quant/exl3_lib/quantize.py b/exllamav3/modules/quant/exl3_lib/quantize.py
+index 63f5359..4ad601f 100644
+--- a/exllamav3/modules/quant/exl3_lib/quantize.py
++++ b/exllamav3/modules/quant/exl3_lib/quantize.py
+@@ -11,6 +11,11 @@ from ....util.tensor import save_tensor_image
+ from functools import lru_cache
+ import threading
+ 
++
++# K2: expose the INPUT-side LDLQ damping (upstream hard-codes 0.025, no CLI flag).
++# K2_SIGMA_REG in the environment sweeps it; unset (or empty) preserves upstream behaviour.
++_SIGMA_REG_DEFAULT = float(os.environ.get("K2_SIGMA_REG") or 0.025)
++
+ # Constant
+ had_k, had_n = 128, 128
+ codebook_scale = 1.24371088
+@@ -495,7 +500,7 @@ def save_failed_cholesky(H: torch.Tensor, quant_args: dict, debug_info: dict | N
+         path = os.path.join(debug_dir, f"cholesky_fail_{key}.pt")
+         torch.save({
+             "H": H.detach().cpu().clone(),
+-            "sigma_reg": quant_args.get("sigma_reg", 0.025),
++            "sigma_reg": quant_args.get("sigma_reg", _SIGMA_REG_DEFAULT),
+             **{k: (v.detach().cpu().clone() if isinstance(v, torch.Tensor) else v)
+                for k, v in (debug_info or {}).items()},
+         }, path)
+@@ -535,7 +540,7 @@ def block_ldl(H: torch.Tensor, b: int, quant_args: dict, verbose: bool, debug_in
+                 print(" ## Cholesky decomp. failed, number of retries exceeded")
+                 raise e
+             print(f" !! Cholesky decomp. failed, increasing diagonal damping, attempt {num_cholesky_retries}/10")
+-            H.diagonal().add_(2.0 * quant_args.get("sigma_reg", 0.025) * H.diagonal().mean())
++            H.diagonal().add_(2.0 * quant_args.get("sigma_reg", _SIGMA_REG_DEFAULT) * H.diagonal().mean())
+             continue
+ 
+         # Fall back on CPU factorization
+@@ -783,7 +788,7 @@ def prepare_H_out(H_out: torch.Tensor, sv: torch.Tensor, quant_args: dict, verbo
+     blockwise_preapply_had_r_(Ho, had_n)
+     blockwise_preapply_had_l_(Ho, had_n)
+     Ho /= Ho.diagonal().mean().clamp_min(1e-30)
+-    Ho.diagonal().add_(quant_args.get("sigma_reg_out", quant_args.get("sigma_reg", 0.025)))
++    Ho.diagonal().add_(quant_args.get("sigma_reg_out", quant_args.get("sigma_reg", _SIGMA_REG_DEFAULT)))
+     L_out, Ho = block_ldl(Ho, 16, quant_args, verbose)
+     L_out.diagonal().fill_(0.0)
+     return L_out.to(device), Ho.to(device)
+@@ -1062,7 +1067,7 @@ def finalize_capture_H(H_data: dict, quant_args: dict, verbose: bool):
+                 q_fallback = diag_mean < 1e-20
+ 
+         # Regularize diagonal
+-        H.diagonal().add_(quant_args.get("sigma_reg", 0.025) * diag_mean)
++        H.diagonal().add_(quant_args.get("sigma_reg", _SIGMA_REG_DEFAULT) * diag_mean)
+ 
+         # Some tests
+         diag = H.diagonal().clone()
+@@ -1569,7 +1574,7 @@ def scaled_ldl(H_orig: torch.Tensor, su: torch.Tensor, quant_args: dict) -> torc
+ 
+ def damping_share(quant_args: dict) -> float:
+     """finalize_capture_H adds sigma_reg x the mean diagonal to H; as a share of the damped mean diagonal"""
+-    r = quant_args.get("sigma_reg", 0.025)
++    r = quant_args.get("sigma_reg", _SIGMA_REG_DEFAULT)
+     return r / (1.0 + r)
+ 
+ 
