@@ -81,7 +81,7 @@ https://huggingface.co/TitanMamo10/qwen25-qat-q3-poc — stock F16 reference (14
 
 - Issue ikawrakow/ik_llama.cpp#2414 (IQ3_KT): filed with diagnosis, conceded with 1.5B numbers — resolved as non-bug.
 - Issue #2415 (`--custom-q` silently ignored): declined by design, warning-only patch offered.
- - K2 (t16) runtime: PR against `ikawrakow/ik_llama.cpp` — 9 commits, 26 files, +3024/-97 (ggml op + CPU
+ - K2 (t16) runtime: PR against `ikawrakow/ik_llama.cpp` — 10 commits, 26 files, +2986/-97 (ggml op + CPU
    reference, CUDA GEMV/f16-MMA prefill/MoE, loader, graph, backend-op test). Rebased onto current main
    with zero conflicts; artifact published ahead of it.
 - Discussion #2417 (Q3 types RFC): whether Q3_0_G128 / Q3_1_G128 / Q3_1_G64 belong in mainline — open, artifacts published, cleanup gated on the answer.
@@ -123,7 +123,7 @@ Artifact: https://huggingface.co/TitanMamo10/Qwen2.5-1.5B-K2-3.34bpw (md5 `584a8
 sha256 verified after upload) with `evidence/k2_evidence.tar.gz` (45 files) behind every number.
 
 The per-tensor rate map comes from a sensitivity measurement plus an exact-budget allocation
-(**SC -> RCO**), not a uniform step: 195 body tensors, 70 at K=3 / 90 at K=4 / 35 at K=5, head 6 bits,
+(**SC -> RCO**), not a uniform step: 196 body tensors, 71 at K=3 / 90 at K=4 / 35 at K=5, head 6 bits,
 target 3.34 -> achieved 3.3394. The files ship with the deposit; the commands are in
 [REPRODUCE.md](REPRODUCE.md#allocation-stage-sc---rco---recipe--this-is-where-the-per-tensor-rates-come-from).
 

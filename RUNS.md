@@ -195,7 +195,7 @@ allocation -> per-tensor K recipe -> encoder.
 2. **Allocation**: `sc_alloc.py --bpw 3.34 --menu 3,4,5 --ratio 1.96 --alpha 2.0 --anchor 3:0.155
    --tie "q_proj+k_proj+v_proj,gate_proj+up_proj"` -- exact-budget greedy with exchange repair, tied
    groups so q/k/v and gate/up share a rate. Result: **target 3.34, achieved 3.3394, predicted KLD
-   0.1553**, 195 body tensors **70 at K=3, 90 at K=4, 35 at K=5**, head 6 bits.
+   0.1553**, 196 body tensors **71 at K=3, 90 at K=4, 35 at K=5**, head 6 bits.
 3. **Recipe**: `recipe.yaml` is what the encoder consumes (`convert.py -rcp recipe.yaml`).
 
 Files: `pipeline/qwen15_3.34bpw/{sc.json, grid.json, recipe.yaml}` in the deposit. Reproducing
@@ -255,8 +255,8 @@ Size of the 3.34 + K2E artifact is known and **validated, but its quality is not
 rewrites the f16 base into the trellis-embedding layout, 1,197,866,720 -> **849,632,768 B (-348.2 MB,
 -29.1%)**, two runs byte-identical, and a CPU validator passes **21/21** (732 other tensors byte-identical,
 embed+signs dims/type, full KV contract, hidden/vocab check, pack byte equality, EOF integrity); the numpy
-mirror of the CUDA embed kernel decodes 12 rows at cos >= 0.99774. Two things were never run: a runtime
-load test and a perplexity/retention arm on this model. Additional constraint recorded with it: the MTP and
+mirror of the CUDA embed kernel decodes 12 rows at cos >= 0.99774. The coding cost at 3.34 bpw **is** measured: **-1.2 points** (187 vs 190 of 246, controlled against the
+scales-identical f16-embedding build), the same as at 6.00 bpw. Only a runtime load test was never run. Additional constraint recorded with it: the MTP and
 draft graphs call plain `ggml_get_rows` (no I16 case -> `GGML_ABORT`), so the trellis embedding must stay
 off for qwen35moe (and glm5next/deepseek2/deepseek4/glm4/qwen4exp/step35) until those graphs learn the
 branch; dense qwen2/qwen3 are safe.
@@ -285,7 +285,7 @@ model; the rest is Hessian + Cholesky + proxies + I/O. Attribution by torch prof
 | proxy trimming (rfn/cos/sqnr) | `num_ref_states = 5` | **dead** — already trivial |
 | Hessian sharing | 4 Hessians/layer, not 7 (q/k/v share, up/gate share) | **already done** |
 | beam in the tile search | **WITHDRAWN as a speed lever**: the lossless width (8192) equals the full state count at K=3 (8192) and exceeds it at K=4/5/6, so the quality-preserving beam *is* the exact search (**1.0x**); widths that prune cost distortion (4096 = +2.3%, 1024 = +7.9%, 256 = +12.1%) | **dead for speed** -- the search half can only be traded away or removed by a codec with a smaller state space, and every measured codec candidate is worse |
-| Woodbury `H^-1` instead of the Cholesky factor | identity exact to 1.4e-14, ~2000x cheaper per solve | **unusable as-is**: `ldlq` consumes Cholesky slices, so it needs the H^-1 (GPTQ) recursion = algorithm change — QATv2 |
+| Woodbury `H^-1` instead of the Cholesky factor | exact on **low-rank** matrices only (1.4e-14); ~2000x per solve there | **inapplicable here**: at 250x2048 = 512k calibration positions and d = 8960, rank(X) = d, so there is no low-rank form; and even with one, `ldlq` consumes Cholesky slices (needs the H^-1/GPTQ recursion) — QATv2 |
 | diversity / extra WAVA passes / local-exact refinement | +20% / bit-identical / full sweep | **rejected** |
 | second Gauss-Seidel sweep (QAT scales) | +0.0007 | **null** |
 | v4 teacher-bridged CE+KL (QAT) | +0.19% | **washed out** by the F16 downstream |

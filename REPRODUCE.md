@@ -73,6 +73,6 @@ python qat_tools/sc_alloc.py -m sc_body.json -o grid.json --bpw 3.34 --menu 3,4,
 python exllamav3/convert.py -i <hf model> -o out -w out_work -rcp recipe.yaml -cd <trace> -hb 6 -d 0
 ```
 
-The released map: 195 body tensors, 70 at K=3 / 90 at K=4 / 35 at K=5, head 6 bits, target 3.34 ->
+The released map: 196 body tensors, 71 at K=3 / 90 at K=4 / 35 at K=5, head 6 bits, target 3.34 ->
 achieved 3.3394, predicted KLD 0.1553. The three files (`sc.json`, `grid.json`, `recipe.yaml`) ship
 with the deposit under `pipeline/qwen15_3.34bpw/`.
