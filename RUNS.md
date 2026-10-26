@@ -234,7 +234,7 @@ load. For this codec it is worth nothing, and the reason is structural:
 
 4000 sampled tiles, `k2_symbol_entropy.py`. The `mul1` codebook is a pseudorandom permutation of the
 levels, so the stored K-bit transitions *are* the true entropy of the representation — there is no
-fixed-rate waste to reclaim, and the 1.32-1.38x gap to the Shannon bound is the code construction, not the
+fixed-rate waste to reclaim, and the 1.23-1.32x gap to the Shannon bound is the code construction, not the
 coder. (For the earlier grid types the same trick was estimated at 5-15% of grid bytes because their code
 usage is non-uniform; it was never implemented, and it costs mmap plus a decode-at-load step.) The payload
 itself has no packing slack either: an I16 tile of `16K` words is exactly `256*K` bits for 256 weights.

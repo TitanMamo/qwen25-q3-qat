@@ -113,14 +113,14 @@ inside F16 noise — against the series' best 0.5B grid artifact at 21.88. Codin
 size (53.3% retention), so the 0.5B claim is "does not degrade ppl", not "keeps coding".
 
 Battery (1.5B, 246-item strict retention on the items F16 solves, recovery vs F16): coding **79.7%**,
-HellaSwag **87.3%**, ARC **100%**, probes **106%**, GSM8K **104%**.
+HellaSwag **87.3%** (593/679), ARC **100%**, probes **106%**, GSM8K **104%**.
 
 Runtime (RTX 3060, 1.5B): decode **176.4 t/s**, prefill **3.2-3.25k t/s**. Prefill is 2.6x behind IQ4_KS,
 and that is the kernel rather than the format: replacing the trellis decode with a constant moves pp512
 by 14% only.
 
 Artifact: https://huggingface.co/TitanMamo10/Qwen2.5-1.5B-K2-3.34bpw (md5 `584a86cb105e9771e6b30d3c7f08f52d`,
-sha256 verified after upload) with `evidence/k2_evidence.tar.gz` (45 files) behind every number.
+sha256 verified after upload) with `evidence/k2_evidence.tar.gz` (48 files) behind every number.
 
 The per-tensor rate map comes from a sensitivity measurement plus an exact-budget allocation
 (**SC -> RCO**), not a uniform step: 196 body tensors, 71 at K=3 / 90 at K=4 / 35 at K=5, head 6 bits,

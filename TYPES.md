@@ -51,8 +51,8 @@ Kernel notes (same spirit as the K1 section above):
   8488 for the fork's int8 IQ4_KS. Replacing the trellis decode with a constant gives 3720 t/s, i.e. the
   format's own decode is 14% of prefill; the rest is an f16 GEMM with f32 accumulate whose hardware
   ceiling here is ~4.9k.
-- **Decode is at parity per byte**: 176.4 t/s vs IQ4_KS 185.1 / IQ3_KS 191.1 while reading ~26% fewer
-  bytes per body weight (5-9% behind, 5/5 interleaved pairs).
+- **Decode is at parity per byte**: 174-176 t/s vs IQ4_KS 184.4 / IQ3_KS 189.6 while reading ~21% fewer
+  bytes per body weight (6-9% behind, 5/5 interleaved pairs).
 - Int8 `mma.sync` prefill was written and is **not correct** (one staging bug left after a 182x
   codebook-constant bug), parked behind an env flag, off by default, never claimed.
 - Bit-exactness: decode vs the reference Python codec, max abs diff 0.0 at K=2/3/6; codebook vs oracle,
