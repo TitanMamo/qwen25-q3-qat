@@ -163,3 +163,82 @@ Reading: embeddings fall off a cliff below Q6 (rare-token rows + every-token loo
 | LDLQ α=1.0/0.5/0.25 | 5.20/4.17/3.99 | — | rejected (needs MSE-type grids) |
 | CEC variants (×6) | best 4.0367, folds ~10.7 | — | falsified (drifted-scale crush + overfit) |
 | Cayley learned-rot | 13.08 unguarded → 3.9504 guarded, 1760/1760 fallbacks | — | harness-side dead (chunks at snap floor); random Hadamard keeps slot |
+
+## K2 trellis, 1.5B 3.34 bpw — WIN (beats this series' ceiling)
+
+Encoder: `exllamav3` converter + a K2 trellis writer, 250x2048 calibration set, `-hb 6 -b 3.34`, 19.4 min
+measured on the RTX 3060 box.
+
+| | body bpw | eff. bpw | ppl |
+|---|---|---|---|
+| Q3_1_G64 fp32-master (this series' best) | 3.50 | 6.19 | 12.3921 +- 0.094 |
+| **K2 (t16)** | **3.34** | **6.22** | **10.5894** |
+
+Read: at matched file rate the *codec* (trellis + block-Hadamard + LDLQ) is worth 1.80 ppl over the best
+learned uniform grid — more than the entire grid/training series recovered. The temperature of that
+conclusion: the trellis carries a codebook *and* error feedback; the grid series' `LDLQ` entry was
+rejected (5.20/4.17/3.99 vs RTN 3.9504) because a min-max grid cannot use the feedback, which is
+consistent — feedback only pays with a codebook dense enough to absorb it.
+
+### Rate anatomy of the released artifact (read from the GGUF, not from notes)
+
+197 trellis tensors, 1,543,569,408 trellis weights:
+
+| K (=bpw) | share of trellis weights |
+|---|---|
+| 3 | 61.1% |
+| 4 | 18.8% |
+| 5 | 5.0% |
+| 6 (output head, `-hb 6`) | 15.1% |
+
+`token_embd` stays F16 (466 MB of the 1198 MB file). Body rate excluding embed+head = **exactly 3.34**;
+on-disk 6.22 bpw counted over the model's 1.54B parameters (the tied embedding is stored twice: f16 copy
+plus trellis head). `-b 3.34` is an allocator **budget**, not a per-tensor rate: `conversion/allocation.py`
+steps each module through {1, 1.5, 2, 2.5, 3, 3.5, 4..8} (half-steps below 4 bpw, mul1 codebook only),
+priority-ordered, with per-module floors — which is why the mix above appears and why a different model
+gets a different mix. The target is also size-dependent: at the same 3.34 the 0.5B lost coding 100 -> 53.3%
+and GSM8K 16.5 -> 4.0, the 1.5B held 79.7% / 52.0%.
+
+### Embedding: f16 vs 6-bit trellis (K2E)
+
+Measured only at the 6.00 body rate (the one arm where both exist):
+
+| arm | file | coding | HellaSwag | ppl |
+|---|---|---|---|---|
+| 6.00, f16 embedding | 1634 MB | 98.4% | 97.0% | 10.3150 |
+| 6.00 + trellis embedding | 1285 MB | 97.2% | 96.7% | 10.3090 |
+
+PPL equal-to-better, HellaSwag -0.3, coding **-1.2 points** for a 21% smaller file. The 3.34 + K2E
+combination is NOT measured; arithmetic puts it near ~900 MB. Do not claim equal quality there.
+
+## K2 encoder lever kills and where the encode time goes
+
+The encode (1.5B) was 19.4 min: `quant_thread` = **2.00 M weights/s = 54%**, i.e. 2.2x off its own cost
+model; the rest is Hessian + Cholesky + proxies + I/O. Attribution by torch profiler (3 modules, wall
+144.3 s, CUDA op time 195.2 s = 1.35x overlap):
+
+| item | CUDA s | share of wall |
+|---|---|---|
+| tile search `quantize_tiles_frac_kernel<3,...>` | 61.1 | 42% |
+| Hessian accumulation `addmm_ [8960,8960]` (750 calls = 250 cal rows x 3 modules) | 24.7 | 17% |
+| capture dtype conversions (`_to_copy`/`to`/`copy_`) | ~8 | 6% |
+| `Memcpy DtoH` (state -> host, pageable) | 6.1 | 4% |
+| calibration forwards (f16 GEMMs, paged attn) | ~12 | 8% |
+| capture elementwise (`isfinite`, `square`, `pow`, `mul`) | ~6 | 4% |
+
+| lever | result | verdict |
+|---|---|---|
+| assembly (GGUF rewrite) | 91 s -> 4 s, byte-identical (md5) | **KEPT** (~7% of the encode) |
+| TF32 calibration Hessian | layer-1 rfn +36%, layer 2 `cholesky: not positive-definite` | **REJECTED** |
+| block size 1024 -> 512/256 threads | 268 s -> 271 s (0.99x), pack byte-identical | **REJECTED** — the search is throughput-bound, not barrier-bound |
+| `-hreg` sigma sweep | sigma 0 / 0.005 / 0.05 all give ppl 44,440,843 | **KNOB IS BROKEN** (sets `sigma_reg_out` only; main sigma is `K2_SIGMA_REG`) |
+| proxy trimming (rfn/cos/sqnr) | `num_ref_states = 5` | **dead** — already trivial |
+| Hessian sharing | 4 Hessians/layer, not 7 (q/k/v share, up/gate share) | **already done** |
+| beam 8192 in the tile search | tile level: rfn identical to exact (0.15474); 4096 = +2.3%, 1024 = +7.9% | **not shipped** (needs per-step state lists + pinned ring anchor) — QATv2 |
+| Woodbury `H^-1` instead of the Cholesky factor | identity exact to 1.4e-14, ~2000x cheaper per solve | **unusable as-is**: `ldlq` consumes Cholesky slices, so it needs the H^-1 (GPTQ) recursion = algorithm change — QATv2 |
+| diversity / extra WAVA passes / local-exact refinement | +20% / bit-identical / full sweep | **rejected** |
+| second Gauss-Seidel sweep (QAT scales) | +0.0007 | **null** |
+| v4 teacher-bridged CE+KL (QAT) | +0.19% | **washed out** by the F16 downstream |
+
+Also worth keeping: the checkpoint path is synchronous and rewrites the WHOLE state (3.1 GB here,
+~70 GB at 35B) every `-cpi` seconds (default 120) — a real cost that scales badly with model size.

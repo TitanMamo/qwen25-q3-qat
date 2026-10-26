@@ -2,7 +2,12 @@
 
 Goal: a ~3–3.5 bpw quantization whose grid is learned by training (QAT) instead of fitted post-hoc (PTQ), so deployment *is* the training grid. Base models Qwen2.5-0.5B (fast loop) and 1.5B (scale check) — the largest a 6 GB card can train through quantization with a CPU-offload AdamW trainer.
 
-Status: **the format/runtime half is done; the training half is not at its bar.** Pre-registered bar: wikitext2 ppl of the Q3 file ≤ 16.5 (stock F16 14.74, stock IQ3_K+imatrix 15.80 — must beat PTQ at fewer bits). Best 0.5B: **21.25** (codebook-grid champion, §2); best 1.5B: **12.39** (+18.8% over stock 10.43, fp32-master run).
+Status: **the format/runtime half is done; the training half is not at its bar.**
+
+**Update (2026-10-26): the trellis track has passed this series' ceiling.** K2 (t16) reaches
+**10.5894** on the same 1.5B/corpus where the best artifact here (Q3_1_G64, fp32-master) sits at
+**12.3921** — at matched effective file bpw (6.22 vs 6.19) and a lower body rate (3.34 vs 3.50).
+See [§7](#7-trellis-k2-the-codec-that-beat-the-grid-series). Pre-registered bar: wikitext2 ppl of the Q3 file ≤ 16.5 (stock F16 14.74, stock IQ3_K+imatrix 15.80 — must beat PTQ at fewer bits). Best 0.5B: **21.25** (codebook-grid champion, §2); best 1.5B: **12.39** (+18.8% over stock 10.43, fp32-master run).
 
 Separate project: [q38-6gb](https://github.com/TitanMamo/q38-6gb) (serving Qwen3.8-Flash-Next on 6 GB VRAM). Different model, different question — kept apart deliberately.
 
@@ -69,6 +74,9 @@ https://huggingface.co/TitanMamo10/qwen25-qat-q3-poc — stock F16 reference (14
 
 - Issue ikawrakow/ik_llama.cpp#2414 (IQ3_KT): filed with diagnosis, conceded with 1.5B numbers — resolved as non-bug.
 - Issue #2415 (`--custom-q` silently ignored): declined by design, warning-only patch offered.
+ - K2 (t16) runtime: PR against `ikawrakow/ik_llama.cpp` — 9 commits, 26 files, +3024/-97 (ggml op + CPU
+   reference, CUDA GEMV/f16-MMA prefill/MoE, loader, graph, backend-op test). Rebased onto current main
+   with zero conflicts; artifact published ahead of it.
 - Discussion #2417 (Q3 types RFC): whether Q3_0_G128 / Q3_1_G128 / Q3_1_G64 belong in mainline — open, artifacts published, cleanup gated on the answer.
 - Trellis rebuild watch (Sep 2026): upstream is extending sub-256-row coverage — issue #2422 (block-64 trellis request), PR #2480 (IQ4_KS_R16, new repacked type, owner calls it "first of a planned series"), PR #2481 (IQ3_KT/IQ4_KT sub-256 tails, review pending). Direction is reach (coverage), not new codebooks. Our interest: a sub-256 *codebook* type (IQ3_KS-R16 class) — 0.5B's 896-dim rows have no stock codebook home today.
 - Literature now on the table (all verified from papers/code, none yet tested by us): **GSQ** (IST-DASLab, Gumbel-Softmax assignment optimization, 3-bit ≈ QTIP on 70B, GGUF K-Quant refine pipeline); **SLQ** (task-lossless at 3.3 bits via non-uniform asymmetric grids + γ² law mandating asymmetry — our grids already satisfy it); **RCO** (exact-budget discrete allocation on true loss — the principled replacement for heuristic mixed-rate).
@@ -76,3 +84,36 @@ https://huggingface.co/TitanMamo10/qwen25-qat-q3-poc — stock F16 reference (14
 ## How this was built (human + AI)
 
 Ideas, direction, and verification standards are mine; implementation is AI-assisted. I set the questions (grids to try, bars to beat, ablations to run), the AI writes the trainers, kernels, and drafts — I review, catch mistakes, and redirect. The grid-sweep pivot, the teacher-context bugfix, the contamination filter, and the batch-scaling postmortem all came out of that loop. Nothing here was accepted on the AI's say-so: every number is a measured artifact, every failed run is kept with its lesson, and the unmet bar is stated with its number — falsifiable claims over optimism.
+
+## 7. Trellis (K2): the codec that beat the grid series
+
+A 16x16 tile trellis (EXL3/QTIP class: block-Hadamard(128), bitshift trellis, procedural `mul1`
+codebook) with LDLQ error feedback, at a 3.34 body rate. Same model family, same corpus:
+
+| | body bpw | eff. bpw (file) | ppl, 1.5B |
+|---|---|---|---|
+| this series' best (Q3_1_G64, fp32-master) | 3.50 | 6.19 | 12.3921 |
+| IQ3_KS (upstream 3-bit k-quant) | 3.44 | — | 13.2312 |
+| IQ4_KS | 4.54 | — | 10.9485 |
+| **K2 trellis (t16)** | **3.34** | **6.22** | **10.5894** |
+| F16 reference | 16 | 16 | 10.3099 |
+
+At matched **file** rate the trellis is **1.80 ppl better** than the best learned uniform grid, and 2.6
+better than IQ3_KS while reading fewer bits. Gap to F16: 0.28 ppl.
+
+0.5B, where the grid series loses most: K2 (PTQ + Adam-QAT scales) **14.7148** vs F16 **14.7435** — i.e.
+inside F16 noise — against the series' best 0.5B grid artifact at 21.88. Coding is the weak axis at that
+size (53.3% retention), so the 0.5B claim is "does not degrade ppl", not "keeps coding".
+
+Battery (1.5B, 246-item strict retention on the items F16 solves, recovery vs F16): coding **79.7%**,
+HellaSwag **87.3%**, ARC **100%**, probes **106%**, GSM8K **104%**.
+
+Runtime (RTX 3060, 1.5B): decode **176.4 t/s**, prefill **3.2-3.25k t/s**. Prefill is 2.6x behind IQ4_KS,
+and that is the kernel rather than the format: replacing the trellis decode with a constant moves pp512
+by 14% only.
+
+Artifact: https://huggingface.co/TitanMamo10/Qwen2.5-1.5B-K2-3.34bpw (md5 `584a86cb105e9771e6b30d3c7f08f52d`,
+sha256 verified after upload) with `evidence/k2_evidence.tar.gz` (45 files) behind every number.
+
+Encoder lever kills and the time attribution: [RUNS.md](RUNS.md#k2-encoder-lever-kills-and-where-the-encode-time-goes).
+Type spec: [TYPES.md](TYPES.md#k2-t16-trellis).
