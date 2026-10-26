@@ -115,5 +115,10 @@ by 14% only.
 Artifact: https://huggingface.co/TitanMamo10/Qwen2.5-1.5B-K2-3.34bpw (md5 `584a86cb105e9771e6b30d3c7f08f52d`,
 sha256 verified after upload) with `evidence/k2_evidence.tar.gz` (45 files) behind every number.
 
+The per-tensor rate map comes from a sensitivity measurement plus an exact-budget allocation
+(**SC -> RCO**), not a uniform step: 195 body tensors, 70 at K=3 / 90 at K=4 / 35 at K=5, head 6 bits,
+target 3.34 -> achieved 3.3394. The files ship with the deposit; the commands are in
+[REPRODUCE.md](REPRODUCE.md#allocation-stage-sc---rco---recipe--this-is-where-the-per-tensor-rates-come-from).
+
 Encoder lever kills and the time attribution: [RUNS.md](RUNS.md#k2-encoder-lever-kills-and-where-the-encode-time-goes).
 Type spec: [TYPES.md](TYPES.md#k2-t16-trellis).

@@ -180,6 +180,24 @@ conclusion: the trellis carries a codebook *and* error feedback; the grid series
 rejected (5.20/4.17/3.99 vs RTN 3.9504) because a min-max grid cannot use the feedback, which is
 consistent — feedback only pays with a codebook dense enough to absorb it.
 
+### The map came from SC -> RCO, not from a uniform step
+
+Stage order for the released artifact (`k2_pipeline.sh`): sensitivity measurement -> exact-budget
+allocation -> per-tensor K recipe -> encoder.
+
+1. **SC sensitivity**: `sc_measure.py` injects weight noise at two relative Frobenius norms (0.30, 0.15)
+   into every target Linear, runs 4 calibration rows x 256 tokens, and takes the KL of the last-token
+   logits against the clean run; `S_t = geomean(kld / rfn^2)` per tensor. `lm_head` is dropped so the
+   head rate stays a fixed 6 bits.
+2. **Allocation**: `sc_alloc.py --bpw 3.34 --menu 3,4,5 --ratio 1.96 --alpha 2.0 --anchor 3:0.155
+   --tie "q_proj+k_proj+v_proj,gate_proj+up_proj"` -- exact-budget greedy with exchange repair, tied
+   groups so q/k/v and gate/up share a rate. Result: **target 3.34, achieved 3.3394, predicted KLD
+   0.1553**, 195 body tensors **70 at K=3, 90 at K=4, 35 at K=5**, head 6 bits.
+3. **Recipe**: `recipe.yaml` is what the encoder consumes (`convert.py -rcp recipe.yaml`).
+
+Files: `pipeline/qwen15_3.34bpw/{sc.json, grid.json, recipe.yaml}` in the deposit. Reproducing
+"3.34 bpw" as a *uniform* rate reproduces the rate, not the file.
+
 ### Rate anatomy of the released artifact (read from the GGUF, not from notes)
 
 197 trellis tensors, 1,543,569,408 trellis weights:

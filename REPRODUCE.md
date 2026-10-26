@@ -57,3 +57,22 @@ Evidence for every K2 number: https://huggingface.co/TitanMamo10/Qwen2.5-1.5B-K2
 Encoder measurements live in `bench_scripts/` (profiler attribution, TF32 A/B, occupancy A/B); the
 occupancy run must build inside the `cuda-box` distrobox, because the host has no CUDA compiler and
 `build_ext` needs `nvcc`.
+
+### Allocation stage (SC -> RCO -> recipe) — this is where the per-tensor rates come from
+
+```bash
+# 1. per-tensor sensitivity (needs the model resident; ~1560 short forwards)
+python qat_tools/sc_measure.py -m <hf model> -t ppl_wikitext2.txt -o sc.json \
+    --rows 4 --length 256 --levels 0.30,0.15 --device cuda
+# 2. drop the head from the measurement, then allocate under an exact budget
+python -c "import json;d=json.load(open('sc.json'));d['results'].pop('lm_head',None);json.dump(d,open('sc_body.json','w'))"
+python qat_tools/sc_alloc.py -m sc_body.json -o grid.json --bpw 3.34 --menu 3,4,5 \
+    --ratio 1.96 --alpha 2.0 --anchor 3:0.155 \
+    --tie "q_proj+k_proj+v_proj,gate_proj+up_proj"
+# 3. grid.json -> recipe.yaml (see k2_pipeline.sh step 3), then the encoder consumes it
+python exllamav3/convert.py -i <hf model> -o out -w out_work -rcp recipe.yaml -cd <trace> -hb 6 -d 0
+```
+
+The released map: 195 body tensors, 70 at K=3 / 90 at K=4 / 35 at K=5, head 6 bits, target 3.34 ->
+achieved 3.3394, predicted KLD 0.1553. The three files (`sc.json`, `grid.json`, `recipe.yaml`) ship
+with the deposit under `pipeline/qwen15_3.34bpw/`.
